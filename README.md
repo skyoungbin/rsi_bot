@@ -1,1 +1,2 @@
 # rsi_bot
+skyoungbin
