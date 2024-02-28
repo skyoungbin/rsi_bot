@@ -66,7 +66,7 @@ class RsiNotifier:
 
         self.update_wait_dict()
 
-        time.sleep(0.1)
+        time.sleep(10)
 
     # 대기중인 티커를 업데이트하는 함수 정의
     def update_wait_dict(self):
