@@ -2,96 +2,71 @@ import requests
 import pandas as pd
 import time
 import pyupbit
-import telegram
 import datetime
 import numpy as np
-import asyncio
-import telegram as tel
 import os
-# RSI 알림 클래스 정의
-class RsiNotifier:
-    def __init__(self, token, chat_id):
-        self.bot = tel.Bot(token=token)
-        self.chat_id = chat_id
-        self.wait_dict = {}  # 알림을 보낸 티커 대기 시간 저장
-        self.tickers = pyupbit.get_tickers(fiat="KRW")  # KRW로 거래되는 모든 티커를 가져옴
+import logging
+import threading 
 
-    # 메세지를 보내는 함수 정의 
-    async def send_msg(self, msg):
-        await self.bot.sendMessage(chat_id=self.chat_id, text=msg) 
+import rsi_upbit as rsiupbit
+import rsi_slack as rsislack
 
-    # RSI 계산하는 함수 정의
-    def calculate_rsi(self, symbol):
-        url = "https://api.upbit.com/v1/candles/minutes/30"
-        querystring = {"market": symbol, "count": "500"}
-
-        response = requests.request("GET", url, params=querystring)
-        data = response.json()
-        df = pd.DataFrame(data)
-
-        df = df.reindex(index=df.index[::-1]).reset_index()
-        df['close'] = df["trade_price"]
-
-        def rsi(ohlc: pd.DataFrame, period: int = 14):
-            ohlc["close"] = ohlc["close"]
-            delta = ohlc["close"].diff()
-
-            up, down = delta.copy(), delta.copy()
-            up[up < 0] = 0
-            down[down > 0] = 0
-
-            _gain = up.ewm(com=(period - 1), min_periods=period).mean()
-            _loss = down.abs().ewm(com=(period - 1), min_periods=period).mean()
-
-            RS = _gain / _loss
-            return pd.Series(100 - (100 / (1 + RS)), name="RSI")
-
-        return rsi(df, 14).iloc[-1]
-
-    # RSI 알림을 보내는 함수 정의
-    def send_rsi_alert(self, ticker):
-        rsi = self.calculate_rsi(ticker)
-
-        if rsi >= 71 and ticker not in self.wait_dict:
-            text = f"{ticker} : RSI {round(rsi)}"
-            asyncio.run(self.send_msg(text))
-            self.wait_dict[ticker] = datetime.datetime.now().minute
-            print(text)
-
-        if rsi <= 40 and ticker not in self.wait_dict:
-            text = f"{ticker} : RSI {round(rsi)}"
-            asyncio.run(self.send_msg(text))
-            self.wait_dict[ticker] = datetime.datetime.now().minute
-            print(text)
-
-        self.update_wait_dict()
-
-        time.sleep(10)
-
-    # 대기중인 티커를 업데이트하는 함수 정의
-    def update_wait_dict(self):
-        temp_dict = {}
-        for key, value in self.wait_dict.items():
-            if datetime.datetime.now().minute >= value:
-                if datetime.datetime.now().minute - value < 5:
-                    temp_dict[key] = value
-            else:
-                if datetime.datetime.now().minute + 60 - value < 5:
-                    temp_dict[key] = value
-        self.wait_dict = temp_dict
+def set_folders():
+    try:
+        if not os.path.exists("log_"):
+            os.mkdir("log_")
+    except OSError:
+        print ('Error: Creating directory. ' +  "log_")
         
+    try:
+        if not os.path.exists("tmp_"):
+            os.mkdir("tmp_")
+    except OSError:
+        print ('Error: Creating directory. ' +  "tmp_")
 
-    # 모든 티커에 대해 RSI 알림을 보내는 함수 정의
-    def run(self):
-        while True:
-            for ticker in self.tickers:
-                try:
-                    self.send_rsi_alert(ticker)
-                except:
-                    continue
+def set_logging(log_level):
+
+    # 로그 생성
+    logger = logging.getLogger()
+    # 로그 레벨 문자열을 적절한 로깅 상수로 변환
+    log_level_constant = getattr(logging, log_level, logging.INFO)
+    # 로그의 출력 기준 설정
+    logger.setLevel(log_level_constant)
+    # log 출력 형식
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # log를 console에 출력
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+    # log를 파일에 출력
+    #file_handler = logging.FileHandler('GoogleTrendsBot.log')
+    #file_handler.setFormatter(formatter)
+    #logger.addHandler(file_handler)
+
+
 
 if __name__ == "__main__":
-    tocken=os.getenv('TOCKEN')
-    chat_id=os.getenv('CHAT_ID')
-    notifier = RsiNotifier(tocken, chat_id)
-    notifier.run()
+
+
+    SLACK_BOT_TOKEN=os.getenv('SLACK_BOT_TOKEN')
+    SLACK_APP_TOKEN=os.getenv('SLACK_APP_TOKEN')
+    CHANNEL_ID=os.getenv('CHANNEL_ID')
+
+    set_folders()
+    set_logging('INFO')
+
+
+    rsi = rsiupbit.RsiNotifier()
+    slack = rsislack.SlackBot(SLACK_BOT_TOKEN, SLACK_APP_TOKEN, CHANNEL_ID)
+
+    slack.set_rsi(rsi)
+    rsi.set_slack(slack.send_message)
+
+    rsi_thread = threading.Thread(target=rsi.run)
+    slack_thread = threading.Thread(target=slack.start_slack_app)
+
+
+    rsi_thread.start()
+    slack_thread.start()
+
+    slack_thread.join()
