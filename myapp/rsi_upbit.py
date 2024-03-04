@@ -82,8 +82,8 @@ class RsiNotifier:
         last_bar = datetime.datetime.strptime(df['candle_date_time_kst'].iloc[0], '%Y-%m-%dT%H:%M:%S')
 
         with getattr(self, ticker.lower()).lock:
+            getattr(self, ticker.lower()).last_row = df.head(1)
             df = self.calc_df(df)
-            getattr(self, ticker.lower()).last_row = df.tail(1)
             df['rsi'] = trade_util.get_rsi(df.close, getattr(self, ticker.lower()).rsi_window)
 
             if getattr(self, ticker.lower()).last_bar == last_bar:
