@@ -1,46 +1,37 @@
 import requests
 import pandas as pd
 import time
-import pyupbit
 import datetime
-import numpy as np
-import os
 import logging
 import threading
+import json
 
 import comm_.trade_util as trade_util
-
-class tickerData:
-    def __init__(self):
-
-        self.ticker_df = pd.DataFrame()
-        self.last_row = pd.DataFrame()
-        self.last_bar = None
-        self.wait = None
-        self.candle = 30
-        self.vol_high = 70
-        self.vol_low = 40
-        self.rsi_window = 14
-        self.lock = threading.Lock()
-
-    def get_state(self):
-        return {"last_row": self.last_row.to_dict(orient='records'), "candle": self.candle, "vol_high": self.vol_high, "vol_low": self.vol_low, "rsi_window": self.rsi_window}
-        
+import comm_.tool_util as tool_util
+import comm_.alltickerdata as alltickerdata
+import comm_.tickerdata as tickerdata
+import comm_.userdata as userdata
 
 # RSI 알림 클래스 정의
 class RsiNotifier:
     def __init__(self):
-        self.update_all_tickers()
-        self.tickers = ['KRW-BTC'] #, 'KRW-ETH', 'KRW-NEO'
-        self.gen_tickers(self.tickers)
 
-    #slack 메세지
-    def set_slack(self, send_message_func):
+        self.alltickerdata = alltickerdata.alltickerData()
+
+        self.userdata = userdata.userData(self)
+
+        self.gen_tickers(self.alltickerdata.tickers)
+
+    
+    # slack 메세지
+    def set_slack(self, send_message_func, send_pinned_func):
         self.send_message = send_message_func
+        self.pinned_message = send_pinned_func
 
-    # 사용가능 ticker 받아오기
-    def update_all_tickers(self):
-        self.all_tickers = pyupbit.get_tickers(fiat="KRW") # KRW로 거래되는 모든 티커를 가져옴
+    def set_schedule(self):
+        self.schedule_del_olddf()
+        self.schedule_report_pinned_message()
+
 
     # tickerData 클래스 생성
     def gen_tickers(self, ticker):
@@ -48,12 +39,14 @@ class RsiNotifier:
         if isinstance(ticker, str):
             ticker = [ticker]
         for symbol in ticker:
-            setattr(self, symbol.lower(), tickerData())
+            setattr(self, symbol.lower(), tickerdata.tickerData())
 
+    # tickerData 클래스 제거
     def con_tickers(self, ticker):
         delattr(self, ticker.lower())
 
     def get_upbit_api(self, ticker):
+        logging.debug('start get_upbit_api')
         while True:
             try:
                 url = f"https://api.upbit.com/v1/candles/minutes/{getattr(self, ticker.lower()).candle}"
@@ -62,14 +55,26 @@ class RsiNotifier:
                 response = requests.request("GET", url, params=querystring)
                 data = response.json()
 
-                return data
+                return pd.DataFrame(data)
             except Exception as e:
                 logging.debug(e)
 
-    #데이터프레임 변환
+    def update_last_row(self, ticker, df):
+        logging.debug('start update_last_row')
+
+        getattr(self, ticker.lower()).last_row = df.head(1)
+
+    # 데이터프레임 변환
     def calc_df(self, df):
         df = df.reindex(index=df.index[::-1]).reset_index()
-        df = df.rename(columns={'candle_date_time_kst': 'time', 'opening_price': 'open', 'high_price': 'high', 'low_price': 'low', 'trade_price': 'close', 'candle_acc_trade_price': 'volume'})
+        df = df.rename(columns={
+            'candle_date_time_kst': 'time',
+            'opening_price': 'open',
+            'high_price': 'high',
+            'low_price': 'low',
+            'trade_price': 'close',
+            'candle_acc_trade_price': 'volume',
+            })
         df = df[['time', 'open', 'high', 'low', 'close', 'volume']]
         df['time'] = pd.to_datetime(df['time'])
         df.set_index('time', inplace=True)
@@ -77,79 +82,96 @@ class RsiNotifier:
 
     # RSI 계산하는 함수 정의
     def calculate_rsi(self, ticker):
+        logging.debug('start calculate_rsi')
 
-        df = pd.DataFrame(self.get_upbit_api(ticker))
+        df = self.get_upbit_api(ticker)
         last_bar = datetime.datetime.strptime(df['candle_date_time_kst'].iloc[0], '%Y-%m-%dT%H:%M:%S')
+        self.update_last_row(ticker, df)
 
-        with getattr(self, ticker.lower()).lock:
-            getattr(self, ticker.lower()).last_row = df.head(1)
-            df = self.calc_df(df)
-            df['rsi'] = trade_util.get_rsi(df.close, getattr(self, ticker.lower()).rsi_window)
 
-            if getattr(self, ticker.lower()).last_bar == last_bar:
-                #logging.info('pass')
-                last_rsi = None
-            elif getattr(self, ticker.lower()).last_bar is None:
-                #logging.info('none')
-                getattr(self, ticker.lower()).last_bar = last_bar
-                getattr(self, ticker.lower()).ticker_df = df.iloc[:-1]
-                last_rsi = df['rsi'].iloc[-1]
-            else: 
-                #logging.info('update')
-                getattr(self, ticker.lower()).last_bar = last_bar
-                getattr(self, ticker.lower()).ticker_df = pd.concat([getattr(self, ticker.lower()).ticker_df, df.iloc[-2:-1]])
-                last_rsi = df['rsi'].iloc[-1]
+        df = self.calc_df(df)
+        df['rsi'] = trade_util.get_rsi(df.close, getattr(self, ticker.lower()).rsi_window)
+
+        if getattr(self, ticker.lower()).last_bar == last_bar:
+            #logging.info('pass')
+            last_rsi = df['rsi'].iloc[-1]
+        elif getattr(self, ticker.lower()).last_bar is None:
+            #logging.info('none')
+            getattr(self, ticker.lower()).last_bar = last_bar
+            getattr(self, ticker.lower()).ticker_df = df.iloc[:-1].dropna()
+            last_rsi = df['rsi'].iloc[-1]
+        else: 
+            #logging.info('update')
+            getattr(self, ticker.lower()).last_bar = last_bar
+            getattr(self, ticker.lower()).ticker_df = pd.concat([getattr(self, ticker.lower()).ticker_df, df.iloc[-2:-1]])
+            last_rsi = df['rsi'].iloc[-1]
+        getattr(self, ticker.lower()).last_rsi = last_rsi
         
         return last_rsi
 
 
     # RSI 알림을 보내는 함수 정의
     def send_rsi_alert(self, ticker):
+        
         rsi = self.calculate_rsi(ticker)
+        #logging.info(rsi)
 
         if rsi is not None:
-            if rsi >= getattr(self, ticker.lower()).vol_high and getattr(self, ticker.lower()).wait is None:
-                text = f"{ticker} : RSI {rsi}"
-                getattr(self, ticker.lower()).wait = datetime.datetime.now().minute
-                self.send_message(text)
-                logging.info(text)
 
-            if rsi <= getattr(self, ticker.lower()).vol_low and getattr(self, ticker.lower()).wait is None:
-                text = f"{ticker} : RSI {rsi}"
-                getattr(self, ticker.lower()).wait = datetime.datetime.now().minute
-                self.send_message(text)
-                logging.info(text)
+            if (
+                rsi >= getattr(self, ticker.lower()).vol_high
+                or
+                rsi <= getattr(self, ticker.lower()).vol_low
+                ):
+                if getattr(self, ticker.lower()).wait_msg is None:
 
-        self.update_wait_dict()
-        self.df_del_old()
+                    text = f"{ticker} : RSI {rsi}"
+
+                    self.send_message(text)
+                    logging.info(text)
+                else:
+                    pass
+
+                getattr(self, ticker.lower()).set_wait(tool_util.get_kr_time())
 
         time.sleep(0.2)
+    
+    def del_olddf(self): 
+        logging.debug('start del_olddf')
+        tickers = self.alltickerdata.tickers
+        for ticker in tickers:
+            getattr(self, ticker.lower()).ticker_df = getattr(self, ticker.lower()).ticker_df[getattr(self, ticker.lower()).ticker_df.index > tool_util.one_week_ago()]
 
+    def schedule_del_olddf(self):
+        # Timer를 생성하고 시작합니다.
+        t = threading.Timer(tool_util.delay_h(6), self.schedule_del_olddf)
+        t.start()
 
-    # 대기중인 티커를 업데이트하는 함수 정의
-    def update_wait_dict(self):
+        self.del_olddf()
 
-        for ticker in self.tickers:
-            temp = None
-            with getattr(self, ticker.lower()).lock:
-                if getattr(self, ticker.lower()).wait is not None:
-                    value = getattr(self, ticker.lower()).wait
-                    if datetime.datetime.now().minute >= value:
-                        if datetime.datetime.now().minute - value < 10:
-                            temp = value
-                    else:
-                        if datetime.datetime.now().minute + 60 - value < 10:
-                            temp = value
-                    getattr(self, ticker.lower()).wait = temp
+    def report_pinned_message(self):
+        logging.debug('start report_pinned_message')
+ 
+        message = f'''
+        감시중인 Ticker = {self.alltickerdata.tickers}
+        {json.dumps(self.userdata.get_state(), indent=4)}
+        '''
 
-    def df_del_old(self):    
-        pass
+        self.pinned_message(message)
+
+    def schedule_report_pinned_message(self):
+        # Timer를 생성하고 시작합니다.
+        t = threading.Timer(tool_util.delay_h(8), self.schedule_report_pinned_message)
+        t.start()
+
+        self.report_pinned_message()
             
     # 모든 티커에 대해 RSI 알림을 보내는 함수 정의
     def run(self):
         while True:
-            for ticker in self.tickers:
+            tickers = self.alltickerdata.tickers
+            for ticker in tickers:
 
                 self.send_rsi_alert(ticker)
 
-            time.sleep(60)
+            time.sleep(tool_util.delay_s(20))

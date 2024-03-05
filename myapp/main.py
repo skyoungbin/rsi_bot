@@ -1,9 +1,4 @@
-import requests
-import pandas as pd
-import time
-import pyupbit
-import datetime
-import numpy as np
+
 import os
 import logging
 import threading 
@@ -58,9 +53,11 @@ if __name__ == "__main__":
 
     rsi = rsiupbit.RsiNotifier()
     slack = rsislack.SlackBot(SLACK_BOT_TOKEN, SLACK_APP_TOKEN, CHANNEL_ID)
-
+    
     slack.set_rsi(rsi)
-    rsi.set_slack(slack.send_message)
+    rsi.set_slack(slack.send_message, slack.pinned_message)
+
+    rsi.set_schedule()
 
     rsi_thread = threading.Thread(target=rsi.run)
     slack_thread = threading.Thread(target=slack.start_slack_app)

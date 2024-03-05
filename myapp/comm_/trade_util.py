@@ -1,5 +1,6 @@
 from ta.momentum import RSIIndicator
 
+
 def get_rsi(close, period):
     df_rsi = RSIIndicator(close, window=period).rsi()
     df_rsi = df_rsi.round(2) 
@@ -12,3 +13,11 @@ def calculate_return(initial_price, current_price):
 def calculate_profit(return_rate, investment):
     profit = return_rate  * investment
     return profit
+
+
+
+
+
+
+
+
