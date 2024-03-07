@@ -10,7 +10,7 @@ class tickerData:
         self._last_bar = None
         self._wait_msg = None
         self._last_rsi = None
-        self._candle = 30
+        self._candle = 1
         self._vol_high = 70
         self._vol_low = 40
         self._rsi_window = 14
