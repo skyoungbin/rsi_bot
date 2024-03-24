@@ -2,21 +2,31 @@ import pandas as pd
 import threading
 import logging
 
-class tickerData:
+def save_on_change(func):
+    def wrapper(self, value):
+        func(self, value)  # 원래의 setter 실행
+        if self.manager:
+            self.manager.save_tickers()  # 공통 후처리 로직
+    return wrapper
+
+class TickerData:
     def __init__(self):
 
         self._ticker_df = pd.DataFrame()
+        self._rsi_df = pd.DataFrame()
         self._last_row = pd.DataFrame()
         self._last_bar = None
         self._wait_msg = None
         self._last_rsi = None
-        self._candle = 1
+        self._candle = 30
         self._vol_high = 70
         self._vol_low = 40
         self._rsi_window = 14
 
         self._timer = None
         self.lock = threading.Lock()
+
+        self.manager = None
 
     def get_state(self):
 
@@ -76,14 +86,15 @@ class tickerData:
             self._ticker_df = value
 
     @property
-    def last_row(self):
+    def rsi_df(self):
         with self.lock:
-            return self._last_row
+            return self._rsi_df
 
-    @last_row.setter
-    def last_row(self, value):
+    @rsi_df.setter
+    def rsi_df(self, value):
         with self.lock:
-            self._last_row = value
+            self._rsi_df = value
+
 
     @property
     def last_row(self):
@@ -131,10 +142,11 @@ class tickerData:
             return self._candle
 
     @candle.setter
+    @save_on_change
     def candle(self, value):
-        valid_values = [5, 15, 10, 30, 60, 240]
+        valid_values = [1, 3, 5, 15, 10, 30, 60, 240]
         if value not in valid_values:
-            raise ValueError("분 단위. 가능한 값 : 5, 15, 10, 30, 60, 240")
+            raise ValueError("분 단위. 가능한 값 : 1, 3, 5, 15, 10, 30, 60, 240")
         with self.lock:
             self._candle = value
 
@@ -144,6 +156,7 @@ class tickerData:
             return self._vol_high
 
     @vol_high.setter
+    @save_on_change
     def vol_high(self, value):
         if not (1 <= value <= 100) or value < self.vol_low:
             raise ValueError("Value 1 ~ 100사이의 값 vol_low 보다 높아야 함.")
@@ -156,6 +169,7 @@ class tickerData:
             return self._vol_low
 
     @vol_low.setter
+    @save_on_change
     def vol_low(self, value):
         if not (1 <= value <= 100) or value > self.vol_high:
             raise ValueError("Value 1 ~ 100사이의 값 vol_high 보다 낮아야 함.")
@@ -168,6 +182,7 @@ class tickerData:
             return self._rsi_window
 
     @rsi_window.setter
+    @save_on_change
     def rsi_window(self, value):
         if not (1 <= value <= 25):
             raise ValueError("Value 1 ~ 25사이의 값")
@@ -183,3 +198,29 @@ class tickerData:
     def timer(self, value):
         with self.lock:
             self._timer = value
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+
+        del state['_ticker_df']
+        del state['_rsi_df']
+        del state['_last_row']
+        del state['_last_bar']
+        del state['_last_rsi']
+        del state['_timer']
+        del state['lock']
+
+        return state
+
+    def __setstate__(self, state):
+
+        self.__dict__.update(state)
+
+        self._ticker_df = pd.DataFrame()
+        self._rsi_df = pd.DataFrame()
+        self._last_row = pd.DataFrame()
+        self._last_bar = None
+        self._wait_msg = None
+        self._last_rsi = None
+        self._timer = None
+        self.lock = threading.Lock()

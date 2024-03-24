@@ -4,21 +4,27 @@ import pandas as pd
 import comm_.tool_util as tool_util
 import comm_.trade_util as trade_util
 
-class userData:
-    def __init__(self, rsi):
 
-        self.rsi = rsi
+def save_on_change(func):
+    def wrapper(self, value):
+        func(self, value)  # 원래의 setter 실행
+        if self.manager:
+            self.manager.save_users()  # 공통 후처리 로직
+    return wrapper
+
+class UserData:
+    def __init__(self):
 
         self._purchase_status = False
         self._total_assets = 10000
         self._long_price = 0
         self._neutral_price = 0
-        self._orderbook = pd.DataFrame()
         self._buy_ticker = None
+        self._orderbook = pd.DataFrame()
 
         self.lock = threading.Lock()
 
-    def get_state(self):
+    def get_state(self, trade_price):
 
         return {
             self.__class__.__name__: {
@@ -26,15 +32,13 @@ class userData:
                 "total_assets": self.total_assets,
                 "purchase_status": self.purchase_status,
                 "buy_ticker": self.buy_ticker,
-                "return_rate": trade_util.calculate_return(self.long_price,
-                    getattr(self.rsi, self.buy_ticker.lower()).get_state()['tickerData']['last_row'][0]['trade_price']) * 100
-                    if self.buy_ticker else None
+                "return_rate": trade_util.calculate_return(self.long_price, trade_price) * 100 if self.buy_ticker else None
             }
         }
 
-    def buy_order(self, ticker):
+    def buy_order(self, ticker, trade_price):
         self.buy_ticker = ticker
-        self.long_price = getattr(self.rsi, self.buy_ticker.lower()).get_state()['tickerData']['last_row'][0]['trade_price']
+        self.long_price = trade_price
         total_assets = self.total_assets
 
         data = {
@@ -55,8 +59,8 @@ class userData:
 
         return data
 
-    def sell_order(self, ticker):
-        self.neutral_price = getattr(self.rsi, self.buy_ticker.lower()).get_state()['tickerData']['last_row'][0]['trade_price']
+    def sell_order(self, ticker, trade_price):
+        self.neutral_price = trade_price
         return_rate = trade_util.calculate_return(self.long_price, self.neutral_price)
         self.total_assets = self.total_assets + trade_util.calculate_profit(return_rate, self.total_assets)
 
@@ -85,6 +89,7 @@ class userData:
             return self._purchase_status
 
     @purchase_status.setter
+    @save_on_change
     def purchase_status(self, value):
         with self.lock:
             self._purchase_status = value
@@ -95,6 +100,7 @@ class userData:
             return self._total_assets
 
     @total_assets.setter
+    @save_on_change
     def total_assets(self, value):
         with self.lock:
             self._total_assets = value
@@ -105,6 +111,7 @@ class userData:
             return self._long_price
 
     @long_price.setter
+    @save_on_change
     def long_price(self, value):
         with self.lock:
             self._long_price = value
@@ -115,9 +122,21 @@ class userData:
             return self._neutral_price
 
     @neutral_price.setter
+    @save_on_change
     def neutral_price(self, value):
         with self.lock:
             self._neutral_price = value
+
+    @property
+    def buy_ticker(self):
+        with self.lock:
+            return self._buy_ticker
+
+    @buy_ticker.setter
+    @save_on_change
+    def buy_ticker(self, value):
+        with self.lock:
+            self._buy_ticker = value
 
     @property
     def orderbook(self):
@@ -129,12 +148,19 @@ class userData:
         with self.lock:
             self._orderbook = value
 
-    @property
-    def buy_ticker(self):
-        with self.lock:
-            return self._buy_ticker
 
-    @buy_ticker.setter
-    def buy_ticker(self, value):
-        with self.lock:
-            self._buy_ticker = value
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+
+        del state['_orderbook']
+        del state['lock']
+
+        return state
+
+    def __setstate__(self, state):
+
+        self.__dict__.update(state)
+
+        self._orderbook = pd.DataFrame()
+        self.lock = threading.Lock()

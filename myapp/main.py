@@ -19,6 +19,12 @@ def set_folders():
     except OSError:
         print ('Error: Creating directory. ' +  "tmp_")
 
+    try:
+        if not os.path.exists("data_"):
+            os.mkdir("data_")
+    except OSError:
+        print ('Error: Creating directory. ' +  "data_")
+
 def set_logging(log_level):
 
     # 로그 생성

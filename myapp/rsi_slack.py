@@ -23,6 +23,8 @@ class SlackBot:
 
         self.app.command("/get_csv")(self.send_csv_slack)
 
+        self.app.command("/get_rsicsv")(self.send_rsicsv_slack)
+
         self.app.command("/get_graph")(self.send_graph_slack)
 
         self.app.command("/add_tickers")(self.add_tickers)
@@ -60,12 +62,13 @@ class SlackBot:
         ack()
         try:
             ticker = tool_util.change_ticker_name(command['text'])  # 사용자가 입력한 텍스트를 가져옵니다.
-            tickers = self.rsi.alltickerdata.tickers
+            tickers = list(self.rsi.tickermanager.tickers.keys())
 
-            if not ticker or ticker not in tickers:
+
+            if not ticker or ticker.lower() not in tickers:
                 response_message = f"'{ticker}'는 알 수 없는 Ticker입니다. 지원하는 Ticker에서 선택해주세요."
             else:
-                getattr(self.rsi, ticker.lower()).ticker_df.iloc[::-1].to_csv(f'./tmp_/{ticker}.csv')
+                self.rsi.tickermanager.tickers[ticker.lower()].ticker_df.iloc[::-1].to_csv(f'./tmp_/{ticker}.csv')
 
                 response = self.app.client.files_upload_v2(
                     channels=self.CHANNEL_ID,
@@ -79,16 +82,41 @@ class SlackBot:
         say(response_message)
         logging.info(response_message)
 
+
+    def send_rsicsv_slack(self, ack, say, command):
+        ack()
+        try:
+            ticker = tool_util.change_ticker_name(command['text'])  # 사용자가 입력한 텍스트를 가져옵니다.
+            tickers = list(self.rsi.tickermanager.tickers.keys())
+
+
+            if not ticker or ticker.lower() not in tickers:
+                response_message = f"'{ticker}'는 알 수 없는 Ticker입니다. 지원하는 Ticker에서 선택해주세요."
+            else:
+                self.rsi.tickermanager.tickers[ticker.lower()].rsi_df.iloc[::-1].to_csv(f'./tmp_/{ticker}_rsi.csv')
+
+                response = self.app.client.files_upload_v2(
+                    channels=self.CHANNEL_ID,
+                    file=f"./tmp_/{ticker}_rsi.csv"
+                )
+                if response["ok"]:
+                    response_message = "파일 업로드 완료!"
+        except Exception as e:
+            response_message = f"파일 업로드 에러: {e}"
+
+        say(response_message)
+        logging.info(response_message)
+
     def send_graph_slack(self, ack, say, command):
         ack()
         try:
             ticker = tool_util.change_ticker_name(command['text'])  # 사용자가 입력한 텍스트를 가져옵니다.
-            tickers = self.rsi.alltickerdata.tickers
+            tickers = list(self.rsi.tickermanager.tickers.keys())
 
-            if not ticker or ticker not in tickers:
+            if not ticker or ticker.lower() not in tickers:
                 response_message = f"'{ticker}'는 알 수 없는 Ticker입니다. 지원하는 Ticker에서 선택해주세요."
             else:
-                fig = graph_util.create_chart(getattr(self.rsi, ticker.lower()).ticker_df)
+                fig = graph_util.create_chart(self.rsi.tickermanager.tickers[ticker.lower()].ticker_df, self.rsi.tickermanager.tickers[ticker.lower()].rsi_df)
                 # fig.write_image(f"./tmp_/{ticker}.png")
                 write_image(fig, f"./tmp_/{ticker}.png", scale=2.0, width=1920, height=1080)
 
@@ -107,14 +135,14 @@ class SlackBot:
     def add_tickers(self, ack, say, command):
         ack()
         ticker = tool_util.change_ticker_name(command['text'])  # 사용자가 입력한 텍스트를 가져옵니다
-        tickers = self.rsi.alltickerdata.tickers
-        all_tickers = self.rsi.alltickerdata.all_tickers
+        tickers = list(self.rsi.tickermanager.tickers.keys())
+        all_tickers = self.rsi.tickermanager.all_tickers
 
-        if ticker in tickers:
+        if ticker.lower() in tickers:
             response_message = f"'{ticker}'는 이미 생성되어있습니다."
         elif ticker in all_tickers:
-            self.rsi.alltickerdata.append_tickers(ticker)
-            self.rsi.gen_tickers(ticker)
+            #self.rsi.alltickerdata.append_tickers(ticker)
+            self.rsi.tickermanager.gen_tickers(ticker)
             response_message = f"'{ticker}'를 추가하였습니다."
         else:
             response_message = f"'{ticker}'는 알 수 없는 Ticker입니다. 지원하는 Ticker 중에서 선택해주세요."
@@ -126,15 +154,15 @@ class SlackBot:
     def del_tickers(self, ack, say, command):
         ack()
         ticker = tool_util.change_ticker_name(command['text'])  # 사용자가 입력한 텍스트를 가져옵니다.
-        tickers = self.rsi.alltickerdata.tickers
-        all_tickers = self.rsi.alltickerdata.all_tickers
+        tickers = list(self.rsi.tickermanager.tickers.keys())
+        all_tickers = self.rsi.tickermanager.all_tickers
 
 
-        if ticker not in tickers and ticker in all_tickers:
+        if ticker.lower() not in tickers and ticker in all_tickers:
             response_message = f"'{ticker}'는 이미 삭제되어있습니다."
         elif ticker in tickers:
-            self.rsi.alltickerdata.remove_tickers(ticker)
-            self.rsi.con_tickers(ticker)
+            #self.rsi.alltickerdata.remove_tickers(ticker)
+            self.rsi.tickermanager.con_tickers(ticker)
             response_message = f"'{ticker}'를 삭제하였습니다."
         else:
             response_message = f"'{ticker}'는 알 수 없는 Ticker입니다. 지원하는 Ticker 중에서 선택해주세요."
@@ -148,13 +176,12 @@ class SlackBot:
         try:
             ticker, params, value = command["text"].split()
             ticker = tool_util.change_ticker_name(ticker)  # 사용자가 입력한 텍스트를 가져옵니다.
-        
-            tickers = self.rsi.alltickerdata.tickers
+            tickers = list(self.rsi.tickermanager.tickers.keys())
 
-            if not ticker or ticker not in tickers:
+            if not ticker or ticker.lower() not in tickers:
                 response_message = f"'{ticker}'는 알 수 없는 Ticker입니다. 지원하는 Ticker에서 선택해주세요."
             else:
-                getattr(self.rsi, ticker.lower()).update_tickers_params(params, int(value))
+                self.rsi.tickermanager.tickers[ticker.lower()].update_tickers_params(params, int(value))
 
                 response_message = f"{ticker} params 변경을 완료하였습니다 {params}  {value}"
 
@@ -166,22 +193,22 @@ class SlackBot:
 
     def all_tickers(self, ack, say):
         ack()
-        self.rsi.alltickerdata.update_all_tickers()
-        say(f'사용할 수 있는 Ticker입니다 \n{self.rsi.alltickerdata.all_tickers}')
+        self.rsi.tickermanager.update_all_tickers()
+        say(f'사용할 수 있는 Ticker입니다 \n{self.rsi.tickermanager.all_tickers}')
 
     def active_tickers(self, ack, say):
         ack()
-        say(f'감시중인 Ticker입니다.\n{self.rsi.alltickerdata.tickers}')
+        say(f'감시중인 Ticker입니다.\n{list(self.rsi.tickermanager.tickers.keys())}')
 
     def status_tickers(self, ack, say, command):
         ack()
         ticker = tool_util.change_ticker_name(command['text']) # 사용자가 입력한 텍스트를 가져옵니다.
-        tickers = self.rsi.alltickerdata.tickers
-        all_tickers = self.rsi.alltickerdata.all_tickers
+        tickers = list(self.rsi.tickermanager.tickers.keys())
+        all_tickers = self.rsi.tickermanager.all_tickers
 
-        if ticker in all_tickers and ticker in tickers:
+        if ticker in all_tickers and ticker.lower() in tickers:
             self.rsi.update_last_row(ticker, self.rsi.get_upbit_api(ticker))
-            ticker_state = getattr(self.rsi, ticker.lower()).get_state()
+            ticker_state = self.rsi.tickermanager.tickers[ticker.lower()].get_state()
             response_message = f"'{ticker}'의 상태를 불러왔습니다."
             say(json.dumps(ticker_state, indent=4))
         else:
@@ -194,15 +221,16 @@ class SlackBot:
         ack()
         try:
             ticker = tool_util.change_ticker_name(command["text"])  # 사용자가 입력한 텍스트를 가져옵니다.
-            tickers = self.rsi.alltickerdata.tickers
-            all_tickers = self.rsi.alltickerdata.all_tickers
+            tickers = list(self.rsi.tickermanager.tickers.keys())
+            all_tickers = self.rsi.tickermanager.all_tickers
 
-            if self.rsi.userdata.purchase_status == True:
+            if self.rsi.usermanager.users['default'].purchase_status == True:
                 response_message = f"이미 구매한 상태입니다."
-            elif ticker in all_tickers and ticker in tickers:
+            elif ticker in all_tickers and ticker.lower() in tickers:
                 self.rsi.update_last_row(ticker, self.rsi.get_upbit_api(ticker))
+                trade_price = self.rsi.tickermanager.tickers[ticker.lower()].get_state()['TickerData']['last_row'][0]['trade_price']
 
-                data = self.rsi.userdata.buy_order(ticker)
+                data = self.rsi.usermanager.users['default'].buy_order(ticker, trade_price)
 
                 response_message = f"'{ticker}'의 구매를 완료하였습니다."
                 say(json.dumps(data))
@@ -219,13 +247,15 @@ class SlackBot:
         ack()
         try:
 
-            if self.rsi.userdata.purchase_status == False:
+            if self.rsi.usermanager.users['default'].purchase_status == False:
                 response_message = f"이미 판매한 상태입니다."
-            elif self.rsi.userdata.purchase_status == True:
-                ticker = self.rsi.userdata.buy_ticker
+            elif self.rsi.usermanager.users['default'].purchase_status == True:
+                ticker = self.rsi.usermanager.users['default'].buy_ticker
                 self.rsi.update_last_row(ticker, self.rsi.get_upbit_api(ticker))
+                trade_price = self.rsi.tickermanager.tickers[ticker.lower()].get_state()['TickerData']['last_row'][0]['trade_price']
 
-                data = self.rsi.userdata.sell_order(ticker)
+                #getattr(self.rsi, self.buy_ticker.lower()).get_state()['tickerData']['last_row'][0]['trade_price']
+                data = self.rsi.usermanager.users['default'].sell_order(ticker, trade_price)
 
                 response_message = f"'{ticker}'의 판매를 완료하였습니다."
                 say(json.dumps(data))
@@ -241,7 +271,7 @@ class SlackBot:
     def send_orderbook_slack(self, ack, say, command):
         ack()
         try:
-            self.rsi.userdata.orderbook.iloc[::-1].to_csv(f'./tmp_/orderbook.csv')
+            self.rsi.usermanager.users['default'].orderbook.iloc[::-1].to_csv(f'./tmp_/orderbook.csv')
 
             response = self.app.client.files_upload_v2(
                 channels=self.CHANNEL_ID,
@@ -257,7 +287,13 @@ class SlackBot:
 
     def status_users(self, ack, say, command):
         ack()
-        user_state = self.rsi.userdata.get_state()
+        ticker = self.rsi.usermanager.users['default'].buy_ticker
+        if ticker is None:
+            trade_price = None
+        else:
+            trade_price = self.rsi.tickermanager.tickers[ticker.lower()].get_state()['TickerData']['last_row'][0]['trade_price']
+        #getattr(self.rsi, self.buy_ticker.lower()).get_state()['tickerData']['last_row'][0]['trade_price'])
+        user_state = self.rsi.usermanager.users['default'].get_state(trade_price)
         response_message = f"'user'의 상태를 불러왔습니다."
         say(json.dumps(user_state, indent=4))
 

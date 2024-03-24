@@ -4,5 +4,10 @@ services:
       build: .
       restart: unless-stopped
       container_name: sk_rsi_bot
+      volumes:
+        - data:/usr/src/app/myapp
       env_file:
         - .env
+
+volumes:
+  data:

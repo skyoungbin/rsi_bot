@@ -2,7 +2,7 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
 
-def create_chart(df):
+def create_chart(df, df2):
     # 서브플롯 생성
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                         subplot_titles=('Price and RSI', 'Volume'),
@@ -22,6 +22,15 @@ def create_chart(df):
                              name='rsi'),
                   secondary_y=True,
                   row=1, col=1)
+
+    # LIVE_RSI 그래프 추가
+    fig.add_trace(go.Scatter(x=df2.index, y=df2['rsi'],
+                             mode='lines',
+                             name='live_rsi',
+                             opacity=0.6),
+                  secondary_y=True,
+                  row=1, col=1)
+
 
     # 레이아웃 업데이트
     fig.update_layout(

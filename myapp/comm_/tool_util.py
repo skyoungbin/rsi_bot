@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, time
 from pytz import timezone
-
+import pickle
 
 def get_kr_time():
     return datetime.now(timezone('Asia/Seoul'))
