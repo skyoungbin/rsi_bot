@@ -60,7 +60,63 @@ def create_chart(df):
 
     return fig
 
+def create_bot_chart(df):
+    # 서브플롯 생성
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        subplot_titles=('Price and position', 'Volume'),
+                        vertical_spacing=0.1,
+                        specs=[[{"secondary_y": True}], [{}]],
+                        row_heights=[0.8, 0.2])  
 
+    # 캔들스틱 그래프 추가
+    fig.add_trace(go.Candlestick(x=df.index,
+                                 open=df['open'], high=df['high'],
+                                 low=df['low'], close=df['close']),
+                  row=1, col=1)
+
+
+    # position 그래프 추가
+    fig.add_trace(go.Scatter(x=df.index, y=df['position'],
+                                mode='lines',
+                                name='rsi'),
+                    secondary_y=True,
+                    row=1, col=1)
+
+
+    # 레이아웃 업데이트
+    fig.update_layout(
+        yaxis=dict(
+            title='Price',
+            titlefont=dict(
+                color="#1f77b4"
+            ),
+            tickfont=dict(
+                color="#1f77b4"
+            )),
+        yaxis2=dict(
+            title='Position',
+            titlefont=dict(
+                color="#ff7f0e"
+            ),
+            tickfont=dict(
+                color="#ff7f0e"
+            ),
+            overlaying='y',
+            side='right'
+        ),
+        xaxis=dict(
+            rangeslider=dict(
+                visible=False  # Range Slider 제거
+            ),
+            type='date'
+        )
+    )
+
+    # 거래량 그래프 추가
+    fig.add_trace(go.Bar(x=df.index, y=df['volume']),
+                  row=2, col=1)
+
+    return fig
 # def create_chart(df, df2):
 #     # 서브플롯 생성
 #     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,

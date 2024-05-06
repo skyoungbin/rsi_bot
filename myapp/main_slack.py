@@ -59,6 +59,10 @@ class SlackBot:
 
         self.app.command("/get_orderbook_bots")(self.send_bot_orderbook_slack)
 
+        self.app.command("/get_csv_bots")(self.send_bot_csv_slack)
+
+        self.app.command("/get_graph_bots")(self.send_bot_graph_slack)
+
         #################### user ##########################
 
         self.app.command("/buy_tickers")(self.buy_tickers)
@@ -374,7 +378,7 @@ class SlackBot:
             if bot.lower() not in bots and bot in all_bots:
                 response_message = f"'{bot}'는 이미 삭제되어있습니다."
             elif bot in bots:
-                self.rsi.tickermanager.tickers[ticker.lower()].delete_bot_key(alarm)
+                self.rsi.tickermanager.tickers[ticker.lower()].delete_bot_key(bot)
                 response_message = f"'{bot}'를 삭제하였습니다."
             else:
                 response_message = f"'{bot}'는 알 수 없는 Bot입니다. 지원하는 Bot 중에서 선택해주세요."
@@ -447,6 +451,74 @@ class SlackBot:
         say(response_message)
         logging.info(response_message)
 
+
+    def send_bot_csv_slack(self, ack, say, command):
+        ack()
+        try:
+            ticker, bot= command["text"].split()
+            ticker = tool_util.change_ticker_name(ticker)  # 사용자가 입력한 텍스트를 가져옵니다.
+
+            tickers = list(self.rsi.tickermanager.tickers.keys())
+            bots = list(self.rsi.tickermanager.tickers[ticker.lower()].get_bot_key())
+
+            if not ticker or ticker.lower() not in tickers:
+                response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+            else:
+                if bot in bots:
+
+                    bot = self.rsi.tickermanager.tickers[ticker.lower()].get_bot_item(bot)
+
+                    bot.df.iloc[::-1].to_csv(f'./tmp_/{ticker}-{bot}.csv')
+                    
+                    response = self.app.client.files_upload_v2(
+                        channels=self.CHANNEL_ID,
+                        file=f"./tmp_/{ticker}-{bot}.csv"
+                    )
+                    if response["ok"]:
+                        response_message = "파일 업로드 완료!"
+                else:
+                    response_message = f"'{bot}'는 활성되지 않는 Bot입니다. 활성한 Bot 중에서 선택해주세요."
+
+        except Exception as e:
+            response_message = f"파일 업로드 에러: {e}"
+
+        say(response_message)
+        logging.info(response_message)
+
+    def send_bot_graph_slack(self, ack, say, command):
+        ack()
+        try:
+
+            ticker, bot= command["text"].split()
+            ticker = tool_util.change_ticker_name(ticker)  # 사용자가 입력한 텍스트를 가져옵니다.
+
+            tickers = list(self.rsi.tickermanager.tickers.keys())
+            bots = list(self.rsi.tickermanager.tickers[ticker.lower()].get_bot_key())
+
+            if not ticker or ticker.lower() not in tickers:
+                response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+            else:
+                if bot in bots:
+
+                    bot = self.rsi.tickermanager.tickers[ticker.lower()].get_bot_item(bot)
+
+                    fig = graph_util.create_bot_chart(bot.df)
+                    write_image(fig, f"./tmp_/{ticker}-{bot}.png", scale=2.0, width=1920, height=1080)
+                    
+                    response = self.app.client.files_upload_v2(
+                        channels=self.CHANNEL_ID,
+                        file=f"./tmp_/{ticker}-{bot}.png"
+                    )
+                    if response["ok"]:
+                        response_message = "파일 업로드 완료!"
+                else:
+                    response_message = f"'{bot}'는 활성되지 않는 Bot입니다. 활성한 Bot 중에서 선택해주세요."
+
+        except Exception as e:
+            response_message = f"파일 업로드 에러: {e}"
+
+        say(response_message)
+        logging.info(response_message)
 
     #################### user ##########################
 
