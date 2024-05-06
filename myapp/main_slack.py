@@ -23,8 +23,6 @@ class SlackBot:
 
         self.app.command("/get_csv")(self.send_csv_slack)
 
-        self.app.command("/get_rsicsv")(self.send_rsicsv_slack)
-
         self.app.command("/get_graph")(self.send_graph_slack)
 
         self.app.command("/add_tickers")(self.add_tickers)
@@ -39,6 +37,30 @@ class SlackBot:
 
         self.app.command("/status_tickers")(self.status_tickers)
 
+        #################### alarm ##########################
+        self.app.command("/all_alarms")(self.all_alarms)
+
+        self.app.command("/add_alarms")(self.add_alarms)
+
+        self.app.command("/del_alarms")(self.del_alarms)
+
+        self.app.command("/update_alarms")(self.update_alarms)
+
+        self.app.command("/get_csv_alarms")(self.send_alarm_csv_slack)
+
+        #################### bot ##########################
+        self.app.command("/all_bots")(self.all_bots)
+
+        self.app.command("/add_bots")(self.add_bots)
+
+        self.app.command("/del_bots")(self.del_bots)
+
+        self.app.command("/update_bots")(self.update_bots)
+
+        self.app.command("/get_orderbook_bots")(self.send_bot_orderbook_slack)
+
+        #################### user ##########################
+
         self.app.command("/buy_tickers")(self.buy_tickers)
 
         self.app.command("/sell_tickers")(self.sell_tickers)
@@ -47,12 +69,12 @@ class SlackBot:
 
         self.app.command("/status_users")(self.status_users)
         
+        #################### test ##########################
         self.app.message('hello')(self.message_hello)
 
 
     def set_rsi(self, rsi):
         self.rsi = rsi
-
 
     def handle_command(self, ack, say):
         ack()
@@ -68,36 +90,11 @@ class SlackBot:
             if not ticker or ticker.lower() not in tickers:
                 response_message = f"'{ticker}'는 알 수 없는 Ticker입니다. 지원하는 Ticker에서 선택해주세요."
             else:
-                self.rsi.tickermanager.tickers[ticker.lower()].ticker_df.iloc[::-1].to_csv(f'./tmp_/{ticker}.csv')
-
+                self.rsi.tickermanager.tickers[ticker.lower()].get_ticker_df().iloc[::-1].to_csv(f'./tmp_/{ticker}.csv')
+                
                 response = self.app.client.files_upload_v2(
                     channels=self.CHANNEL_ID,
                     file=f"./tmp_/{ticker}.csv"
-                )
-                if response["ok"]:
-                    response_message = "파일 업로드 완료!"
-        except Exception as e:
-            response_message = f"파일 업로드 에러: {e}"
-
-        say(response_message)
-        logging.info(response_message)
-
-
-    def send_rsicsv_slack(self, ack, say, command):
-        ack()
-        try:
-            ticker = tool_util.change_ticker_name(command['text'])  # 사용자가 입력한 텍스트를 가져옵니다.
-            tickers = list(self.rsi.tickermanager.tickers.keys())
-
-
-            if not ticker or ticker.lower() not in tickers:
-                response_message = f"'{ticker}'는 알 수 없는 Ticker입니다. 지원하는 Ticker에서 선택해주세요."
-            else:
-                self.rsi.tickermanager.tickers[ticker.lower()].rsi_df.iloc[::-1].to_csv(f'./tmp_/{ticker}_rsi.csv')
-
-                response = self.app.client.files_upload_v2(
-                    channels=self.CHANNEL_ID,
-                    file=f"./tmp_/{ticker}_rsi.csv"
                 )
                 if response["ok"]:
                     response_message = "파일 업로드 완료!"
@@ -116,7 +113,7 @@ class SlackBot:
             if not ticker or ticker.lower() not in tickers:
                 response_message = f"'{ticker}'는 알 수 없는 Ticker입니다. 지원하는 Ticker에서 선택해주세요."
             else:
-                fig = graph_util.create_chart(self.rsi.tickermanager.tickers[ticker.lower()].ticker_df, self.rsi.tickermanager.tickers[ticker.lower()].rsi_df)
+                fig = graph_util.create_chart(self.rsi.tickermanager.tickers[ticker.lower()].get_ticker_df())
                 # fig.write_image(f"./tmp_/{ticker}.png")
                 write_image(fig, f"./tmp_/{ticker}.png", scale=2.0, width=1920, height=1080)
 
@@ -216,6 +213,242 @@ class SlackBot:
 
         say(response_message)
         logging.info(response_message)
+
+
+    #################### alarm ##########################
+    def all_alarms(self, ack, say):
+        ack()
+        say(f'사용할 수 있는 Alarm입니다 \n{list(self.rsi.alarm_instances.keys())}')
+
+    def add_alarms(self, ack, say, command):
+        ack()
+        ticker, alarm = command["text"].split()
+        ticker = tool_util.change_ticker_name(ticker) 
+
+        tickers = list(self.rsi.tickermanager.tickers.keys())
+        alarms = list(self.rsi.tickermanager.tickers[ticker.lower()].get_alarm_key())
+        all_alarms = list(self.rsi.alarm_instances.keys())
+
+        if ticker.lower() in tickers:
+            if alarm.lower() in alarms:
+                response_message = f"'{alarm}'는 이미 생성되어있습니다."
+            elif alarm in all_alarms:
+                self.rsi.tickermanager.tickers[ticker.lower()].add_alarm_key(alarm, self.rsi.alarm_instances[alarm](self.rsi.tickermanager.tickers[ticker.lower()]))
+                response_message = f"'{alarm}'를 추가하였습니다."
+            else:
+                response_message = f"'{alarm}'는 알 수 없는 Alarm입니다. 지원하는 Alarm 중에서 선택해주세요."
+        else:
+            response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+
+        say(response_message)
+        logging.info(response_message)
+
+    def del_alarms(self, ack, say, command):
+        ack()
+        ticker, alarm = command["text"].split()
+        ticker = tool_util.change_ticker_name(ticker) 
+
+        tickers = list(self.rsi.tickermanager.tickers.keys())
+        alarms = list(self.rsi.tickermanager.tickers[ticker.lower()].get_alarm_key())
+        all_alarms = list(self.rsi.alarm_instances.keys())
+
+        if ticker.lower() in tickers:
+            if alarm.lower() not in alarms and alarm in all_alarms:
+                response_message = f"'{alarm}'는 이미 삭제되어있습니다."
+            elif alarm in alarms:
+                self.rsi.tickermanager.tickers[ticker.lower()].delete_alarm_key(alarm)
+                response_message = f"'{alarm}'를 삭제하였습니다."
+            else:
+                response_message = f"'{alarm}'는 알 수 없는 Alarm입니다. 지원하는 Alarm 중에서 선택해주세요."
+        else:
+            response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+
+        say(response_message)
+        logging.info(response_message)
+
+    def update_alarms(self, ack, say, command):
+        ack()
+
+        try:
+            ticker, alarm, params, value = command["text"].split()
+            ticker = tool_util.change_ticker_name(ticker)  # 사용자가 입력한 텍스트를 가져옵니다.
+
+            tickers = list(self.rsi.tickermanager.tickers.keys())
+            alarms = list(self.rsi.tickermanager.tickers[ticker.lower()].get_alarm_key())
+            all_alarms = list(self.rsi.alarm_instances.keys())
+
+            update_values = {}
+            update_values[params] = value
+            #update_values = dict(zip([params], [value]))
+
+            if not ticker or ticker.lower() not in tickers:
+                response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+            else:
+                if alarm in alarms:
+
+                    self.rsi.tickermanager.tickers[ticker.lower()].update_alarm_item(alarm, **update_values)
+
+                    response_message = f"{ticker}-Alarm|{alarm}| params 변경을 완료하였습니다 {params}  {value}"
+                else:
+                    response_message = f"'{alarm}'는 활성되지 않는 Alarm입니다. 활성한 Alarm 중에서 선택해주세요."
+
+        except Exception as e:
+            response_message = f"{ticker}-Alarm|{alarm}| params 변경 에러: {e}"
+
+        say(response_message)
+        logging.info(response_message)
+
+    def send_alarm_csv_slack(self, ack, say, command):
+        ack()
+        try:
+            ticker, alarm= command["text"].split()
+            ticker = tool_util.change_ticker_name(ticker)  # 사용자가 입력한 텍스트를 가져옵니다.
+
+            tickers = list(self.rsi.tickermanager.tickers.keys())
+            alarms = list(self.rsi.tickermanager.tickers[ticker.lower()].get_alarm_key())
+
+            if not ticker or ticker.lower() not in tickers:
+                response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+            else:
+                if alarm in alarms:
+
+                    alarm = self.rsi.tickermanager.tickers[ticker.lower()].get_alarm_item(alarm)
+
+                    alarm.tick_df.iloc[::-1].to_csv(f'./tmp_/{ticker}-{alarm}.csv')
+                    
+                    response = self.app.client.files_upload_v2(
+                        channels=self.CHANNEL_ID,
+                        file=f"./tmp_/{ticker}-{alarm}.csv"
+                    )
+                    if response["ok"]:
+                        response_message = "파일 업로드 완료!"
+                else:
+                    response_message = f"'{alarm}'는 활성되지 않는 Alarm입니다. 활성한 Alarm 중에서 선택해주세요."
+
+        except Exception as e:
+            response_message = f"파일 업로드 에러: {e}"
+
+        say(response_message)
+        logging.info(response_message)
+
+
+    #################### bot ##########################
+    
+    def all_bots(self, ack, say):
+        ack()
+        say(f'사용할 수 있는 Bot입니다 \n{list(self.rsi.bot_instances.keys())}')
+
+    def add_bots(self, ack, say, command):
+        ack()
+        ticker, bot = command["text"].split()
+        ticker = tool_util.change_ticker_name(ticker) 
+
+        tickers = list(self.rsi.tickermanager.tickers.keys())
+        bots = list(self.rsi.tickermanager.tickers[ticker.lower()].get_bot_key())
+        all_bots = list(self.rsi.bot_instances.keys())
+
+        if ticker.lower() in tickers:
+            if bot.lower() in bots:
+                response_message = f"'{bot}'는 이미 생성되어있습니다."
+            elif bot in all_bots:
+                self.rsi.tickermanager.tickers[ticker.lower()].add_bot_key(bot, self.rsi.bot_instances[bot](self.rsi.tickermanager.tickers[ticker.lower()]))
+                response_message = f"'{bot}'를 추가하였습니다."
+            else:
+                response_message = f"'{bot}'는 알 수 없는 Bot입니다. 지원하는 Bot 중에서 선택해주세요."
+        else:
+            response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+
+        say(response_message)
+        logging.info(response_message)
+
+    def del_bots(self, ack, say, command):
+        ack()
+        ticker, bot = command["text"].split()
+        ticker = tool_util.change_ticker_name(ticker) 
+
+        tickers = list(self.rsi.tickermanager.tickers.keys())
+        bots = list(self.rsi.tickermanager.tickers[ticker.lower()].get_bot_key())
+        all_bots = list(self.rsi.bot_instances.keys())
+
+        if ticker.lower() in tickers:
+            if bot.lower() not in bots and bot in all_bots:
+                response_message = f"'{bot}'는 이미 삭제되어있습니다."
+            elif bot in bots:
+                self.rsi.tickermanager.tickers[ticker.lower()].delete_bot_key(alarm)
+                response_message = f"'{bot}'를 삭제하였습니다."
+            else:
+                response_message = f"'{bot}'는 알 수 없는 Bot입니다. 지원하는 Bot 중에서 선택해주세요."
+        else:
+            response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+
+        say(response_message)
+        logging.info(response_message)
+
+    def update_bots(self, ack, say, command):
+        ack()
+
+        try:
+            ticker, bot, params, value = command["text"].split()
+            ticker = tool_util.change_ticker_name(ticker)  # 사용자가 입력한 텍스트를 가져옵니다.
+
+            tickers = list(self.rsi.tickermanager.tickers.keys())
+            bots = list(self.rsi.tickermanager.tickers[ticker.lower()].get_bot_key())
+            all_bots = list(self.rsi.bot_instances.keys())
+
+            update_values = {}
+            update_values[params] = value
+
+            if not ticker or ticker.lower() not in tickers:
+                response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+            else:
+                if bot in bots:
+
+                    self.rsi.tickermanager.tickers[ticker.lower()].update_bot_item(bot, **update_values)
+
+                    response_message = f"{ticker}-Bot|{bot}| params 변경을 완료하였습니다 {params}  {value}"
+                else:
+                    response_message = f"'{bot}'는 활성되지 않는 Bot입니다. 활성한 Bot 중에서 선택해주세요."
+
+        except Exception as e:
+            response_message = f"{ticker}-Bot|{bot}| params 변경 에러: {e}"
+
+        say(response_message)
+        logging.info(response_message)
+
+    def send_bot_orderbook_slack(self, ack, say, command):
+        ack()
+        try:
+            ticker, bot= command["text"].split()
+            ticker = tool_util.change_ticker_name(ticker)  # 사용자가 입력한 텍스트를 가져옵니다.
+
+            tickers = list(self.rsi.tickermanager.tickers.keys())
+            bots = list(self.rsi.tickermanager.tickers[ticker.lower()].get_bot_key())
+
+            if not ticker or ticker.lower() not in tickers:
+                response_message = f"'{ticker}'는 활성되지 않는 Ticker입니다. 활성한 Ticker 중에서 선택해주세요."
+            else:
+                if bot in bots:
+
+                    bot = self.rsi.tickermanager.tickers[ticker.lower()].get_bot_item(bot)
+                    bot.orderbook.iloc[::-1].to_csv(f'./tmp_/{ticker}-{bot}.csv')
+
+                    response = self.app.client.files_upload_v2(
+                        channels=self.CHANNEL_ID,
+                        file=f"./tmp_/{ticker}-{bot}.csv"
+                    )
+                    if response["ok"]:
+                        response_message = "파일 업로드 완료!"
+                else:
+                    response_message = f"'{bot}'는 활성되지 않는 Bot입니다. 활성한 Bot 중에서 선택해주세요."
+
+        except Exception as e:
+            response_message = f"파일 업로드 에러: {e}"
+
+        say(response_message)
+        logging.info(response_message)
+
+
+    #################### user ##########################
 
     def buy_tickers(self, ack, say, command):
         ack()

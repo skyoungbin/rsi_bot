@@ -17,7 +17,6 @@ class UserData:
 
         self._purchase_status = False
         self._total_assets = 10000
-        self._long_price = 0
         self._neutral_price = 0
         self._buy_ticker = None
         self._orderbook = pd.DataFrame()
@@ -32,54 +31,29 @@ class UserData:
                 "total_assets": self.total_assets,
                 "purchase_status": self.purchase_status,
                 "buy_ticker": self.buy_ticker,
-                "return_rate": trade_util.calculate_return(self.long_price, trade_price) * 100 if self.buy_ticker else None
+                "return_rate": trade_util.calculate_return(self.orderbook.iloc[-1]['price'], trade_price) * 100 if self.purchase_status else None
             }
         }
 
     def buy_order(self, ticker, trade_price):
-        self.buy_ticker = ticker
-        self.long_price = trade_price
-        total_assets = self.total_assets
 
-        data = {
-            "trade_time": [tool_util.get_kr_time().isoformat()],  # 실제 trade_time 값을 사용하십시오
-            "ticker": [self.buy_ticker],
-            "price": [self.long_price],
-            "position": ['long'],
-            "total_assets": [total_assets],
-            "return_rate": ['']
-        }
-
-        # 데이터프레임 생성
-        orderbook = pd.DataFrame(data).set_index('trade_time')
-        self.orderbook = pd.concat([self.orderbook, orderbook])
-        #orderbook.set_index('trade_time', inplace=True)
-
-        self.purchase_status = True
+        data, updated_orderbook, purchase_status, updated_total_assets = trade_util.buy_order(
+            self.orderbook, self.total_assets, ticker, trade_price
+        )
+        self.orderbook = updated_orderbook
+        self.purchase_status = purchase_status
+        self.total_assets = updated_total_assets
 
         return data
 
     def sell_order(self, ticker, trade_price):
-        self.neutral_price = trade_price
-        return_rate = trade_util.calculate_return(self.long_price, self.neutral_price)
-        self.total_assets = self.total_assets + trade_util.calculate_profit(return_rate, self.total_assets)
 
-        data = {
-            "trade_time": [tool_util.get_kr_time().isoformat()],  # 실제 trade_time 값을 사용하십시오
-            "ticker": [ticker],
-            "price": [self.neutral_price],
-            "position": ['neutral'],
-            "total_assets": [self.total_assets],
-            "return_rate": [return_rate * 100]
-        }
-
-        # 데이터프레임 생성
-        orderbook = pd.DataFrame(data).set_index('trade_time')
-        self.orderbook = pd.concat([self.orderbook, orderbook])
-        #orderbook.set_index('trade_time', inplace=True)
-
-        self.purchase_status = False
-        self.buy_ticker = None
+        data, updated_orderbook, purchase_status, updated_total_assets = trade_util.sell_order(
+            self.orderbook, self.total_assets, ticker, trade_price
+        )
+        self.orderbook = updated_orderbook
+        self.purchase_status = purchase_status
+        self.total_assets = updated_total_assets
 
         return data
 

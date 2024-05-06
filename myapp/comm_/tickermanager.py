@@ -1,4 +1,4 @@
-import pickle
+import dill as pickle
 import threading
 import pyupbit
 #import comm_.tickerdata as tickerdata
@@ -68,7 +68,7 @@ class TickerManger:
             ticker_symbols = [ticker_symbols]
         for symbol in ticker_symbols:
             if symbol.lower() not in self.tickers:
-                ticker = TickerData()
+                ticker = TickerData(symbol.upper())
                 ticker.manager = self
                 self.tickers[symbol.lower()] = ticker
         self.save_tickers()

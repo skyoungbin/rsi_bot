@@ -1,75 +1,61 @@
 import pandas as pd
 import threading
 import logging
+import json
 
 def save_on_change(func):
-    def wrapper(self, value):
-        func(self, value)  # 원래의 setter 실행
+    def wrapper(self, *args, **kwargs):  # 가변 인자와 키워드 인자를 받을 수 있도록 수정
+        func(self, *args, **kwargs)  # 원래의 메서드에 모든 인자 전달
         if self.manager:
             self.manager.save_tickers()  # 공통 후처리 로직
     return wrapper
 
 class TickerData:
-    def __init__(self):
 
+    def __init__(self, symbol):
+
+        self.symbol = symbol
         self._ticker_df = pd.DataFrame()
-        self._rsi_df = pd.DataFrame()
         self._last_row = pd.DataFrame()
         self._last_bar = None
-        self._wait_msg = None
-        self._last_rsi = None
         self._candle = 30
-        self._vol_high = 70
-        self._vol_low = 40
-        self._rsi_window = 14
 
-        self._timer = None
+        self._alarm = {}
+        self._bot = {}
+
         self.lock = threading.Lock()
 
         self.manager = None
 
     def get_state(self):
 
-        return {
-            self.__class__.__name__: {
+        state = {}  
+        state[self.__class__.__name__] = {
                 "last_row": self.last_row.to_dict(orient='records'),
-                "last_rsi": self.last_rsi,
                 "candle": self.candle,
-                "vol_high": self.vol_high,
-                "vol_low": self.vol_low,
-                "rsi_window": self.rsi_window,
-            }
         }
-    
-    def set_wait(self, value):
-        logging.debug('start set_wait')
 
-        self.wait_msg = value
+        alarm_items = self.alarm.items()
+        for key, item in alarm_items:
+            state[f'alarm-{key}'] = item.get_state()  # 각 Item의 상태를 가져옵니다.
 
-        if self.timer is None:
-            #self.timer.cancel()  # 이미 실행 중인 타이머가 있다면 취소합니다.
-            self.timer = threading.Timer(300, self.reset_wait)  # 10분 후에 reset_wait 호출
-            self.timer.start()
+        bot_items = self.bot.items()
+        for key, item in bot_items:
+            state[f'bot-{key}'] = item.get_state() 
 
-    def reset_wait(self):
-        logging.debug('start reset_wait')
+        return state
 
-        self.wait_msg = None
-        self.timer = None
 
     def reset_params(self):
         self.ticker_df = pd.DataFrame()
         self.last_row = pd.DataFrame()
         self.last_bar = None
-        self.wait_msg = None
-        self.last_rsi = None
-        self.timer = None
 
     def update_tickers_params(self, params, value):
 
-        if params in ['candle', 'vol_high', 'vol_low', 'rsi_window']:
+        if params in ['candle']:
             setattr(self, params, value)
-            if params in ['candle', 'rsi_window']:
+            if params in ['candle']:
                 self.reset_params()
         else:
             raise ValueError("알 수 없는 params 값 입니다")
@@ -85,15 +71,20 @@ class TickerData:
         with self.lock:
             self._ticker_df = value
 
-    @property
-    def rsi_df(self):
+    def get_ticker_df(self):
         with self.lock:
-            return self._rsi_df
+            tmp_df = self._ticker_df.copy()
 
-    @rsi_df.setter
-    def rsi_df(self, value):
-        with self.lock:
-            self._rsi_df = value
+        alarm_list = self.get_alarm_key()
+        logging.info(alarm_list)
+
+        for alarm_name in alarm_list:
+            alarm = self.get_alarm_item(alarm_name)
+            logging.info(alarm)
+            tmp_df = pd.concat([tmp_df, alarm.df], axis=1, join='outer')
+
+        logging.info(tmp_df)
+        return tmp_df
 
 
     @property
@@ -117,26 +108,6 @@ class TickerData:
             self._last_bar = value
 
     @property
-    def wait_msg(self):
-        with self.lock:
-            return self._wait_msg
-
-    @wait_msg.setter
-    def wait_msg(self, value):
-        with self.lock:
-            self._wait_msg = value
-
-    @property
-    def last_rsi(self):
-        with self.lock:
-            return self._last_rsi
-
-    @last_rsi.setter
-    def last_rsi(self, value):
-        with self.lock:
-            self._last_rsi = value
-
-    @property
     def candle(self):
         with self.lock:
             return self._candle
@@ -150,64 +121,95 @@ class TickerData:
         with self.lock:
             self._candle = value
 
-    @property
-    def vol_high(self):
-        with self.lock:
-            return self._vol_high
 
-    @vol_high.setter
+    @property
+    def alarm(self):
+        with self.lock:  
+            return self._alarm
+
     @save_on_change
-    def vol_high(self, value):
-        if not (1 <= value <= 100) or value < self.vol_low:
-            raise ValueError("Value 1 ~ 100사이의 값 vol_low 보다 높아야 함.")
-        with self.lock:
-            self._vol_high = value
+    def add_alarm_key(self, key, item):
+        with self.lock:  
+            self._alarm[key] = item
 
-    @property
-    def vol_low(self):
-        with self.lock:
-            return self._vol_low
+    def get_alarm_key(self):
+        with self.lock: 
+            return list(self._alarm.keys())
 
-    @vol_low.setter
     @save_on_change
-    def vol_low(self, value):
-        if not (1 <= value <= 100) or value > self.vol_high:
-            raise ValueError("Value 1 ~ 100사이의 값 vol_high 보다 낮아야 함.")
-        with self.lock:
-            self._vol_low = value
+    def delete_alarm_key(self, key):
+        with self.lock:  
+            if key in self._alarm:
+                del self._alarm[key]
 
-    @property
-    def rsi_window(self):
-        with self.lock:
-            return self._rsi_window
-
-    @rsi_window.setter
+    def get_alarm_item(self, key):
+        with self.lock:  
+            return self._alarm.get(key)
+    
     @save_on_change
-    def rsi_window(self, value):
-        if not (1 <= value <= 25):
-            raise ValueError("Value 1 ~ 25사이의 값")
-        with self.lock:
-            self._rsi_window = value
+    def update_alarm_item(self, key, **kwargs):
+
+        item = self.get_alarm_item(key)
+        with self.lock:  
+            if item is not None:
+                for attr_name, attr_value in kwargs.items():
+                    setattr(item, attr_name, attr_value)
+
+
 
     @property
-    def timer(self):
-        with self.lock:
-            return self._timer
+    def bot(self):
+        with self.lock:  
+            return self._bot
 
-    @timer.setter
-    def timer(self, value):
-        with self.lock:
-            self._timer = value
+    @save_on_change
+    def add_bot_key(self, key, item):
+        with self.lock:  
+            self._bot[key] = item
+
+    def get_bot_key(self):
+        with self.lock: 
+            return list(self._bot.keys())
+
+    @save_on_change
+    def delete_bot_key(self, key):
+        with self.lock:  
+            if key in self._bot:
+                del self._bot[key]
+
+    def get_bot_item(self, key):
+        with self.lock:  
+            return self._bot.get(key)
+    
+    @save_on_change
+    def update_bot_item(self, key, **kwargs):
+
+        item = self.get_bot_item(key)
+        with self.lock:  
+            if item is not None:
+                for attr_name, attr_value in kwargs.items():
+                    setattr(item, attr_name, attr_value)
+
+
+    # @property
+    # def bot(self):
+    #     with self.lock:
+    #         return self._bot
+
+    # def add_bot_list(self, value):
+    #     self._bot.append(value)
+
+    # def remove_bot_list(self, value):
+    #     if value in self._bot:
+    #         self._bot.remove(value)
+
 
     def __getstate__(self):
         state = self.__dict__.copy()
 
         del state['_ticker_df']
-        del state['_rsi_df']
         del state['_last_row']
         del state['_last_bar']
-        del state['_last_rsi']
-        del state['_timer']
         del state['lock']
 
         return state
@@ -217,10 +219,6 @@ class TickerData:
         self.__dict__.update(state)
 
         self._ticker_df = pd.DataFrame()
-        self._rsi_df = pd.DataFrame()
         self._last_row = pd.DataFrame()
         self._last_bar = None
-        self._wait_msg = None
-        self._last_rsi = None
-        self._timer = None
         self.lock = threading.Lock()

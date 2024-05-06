@@ -3,8 +3,8 @@ import os
 import logging
 import threading 
 
-import rsi_upbit as rsiupbit
-import rsi_slack as rsislack
+import main_upbit as main_upbit
+import main_slack as main_slack
 
 def set_folders():
     try:
@@ -57,19 +57,19 @@ if __name__ == "__main__":
     set_logging('INFO')
 
 
-    rsi = rsiupbit.RsiNotifier()
-    slack = rsislack.SlackBot(SLACK_BOT_TOKEN, SLACK_APP_TOKEN, CHANNEL_ID)
+    upbit = main_upbit.Notifier()
+    slack = main_slack.SlackBot(SLACK_BOT_TOKEN, SLACK_APP_TOKEN, CHANNEL_ID)
     
-    slack.set_rsi(rsi)
-    rsi.set_slack(slack.send_message, slack.pinned_message)
+    slack.set_rsi(upbit)
+    upbit.set_slack(slack.send_message, slack.pinned_message)
 
-    rsi.set_schedule()
+    upbit.set_schedule()
 
-    rsi_thread = threading.Thread(target=rsi.run)
+    upbit_thread = threading.Thread(target=upbit.run)
     slack_thread = threading.Thread(target=slack.start_slack_app)
 
 
-    rsi_thread.start()
+    upbit_thread.start()
     slack_thread.start()
 
     slack_thread.join()

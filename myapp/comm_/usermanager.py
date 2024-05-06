@@ -1,4 +1,4 @@
-import pickle
+import dill as pickle
 import threading
 from comm_.userdata import UserData
 
