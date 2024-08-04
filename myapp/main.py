@@ -5,6 +5,7 @@ import threading
 
 import main_upbit as main_upbit
 import main_mattermost as main_chat
+from comm_.event_manager import EventManager
 
 def set_folders():
     try:
