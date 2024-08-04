@@ -4,7 +4,7 @@ import logging
 import threading 
 
 import main_upbit as main_upbit
-import main_slack as main_slack
+import main_mattermost as main_chat
 
 def set_folders():
     try:
@@ -49,27 +49,31 @@ def set_logging(log_level):
 if __name__ == "__main__":
 
 
-    SLACK_BOT_TOKEN=os.getenv('SLACK_BOT_TOKEN')
-    SLACK_APP_TOKEN=os.getenv('SLACK_APP_TOKEN')
-    CHANNEL_ID=os.getenv('CHANNEL_ID')
+    #SLACK_BOT_TOKEN=os.getenv('SLACK_BOT_TOKEN')
+    #SLACK_APP_TOKEN=os.getenv('SLACK_APP_TOKEN')
+    #CHANNEL_ID=os.getenv('CHANNEL_ID')
+
+    MATTERMOST_URL =os.getenv('MATTERMOST_URL')
+    MATTERMOST_ACCESS_TOKEN =os.getenv('MATTERMOST_ACCESS_TOKEN')
+    MATTERMOST_CHANNEL_NAME =os.getenv('MATTERMOST_CHANNEL_NAME')
+    MATTERMOST_TEAM_NAME =os.getenv('MATTERMOST_TEAM_NAME')
 
     set_folders()
     set_logging('INFO')
+    event_manager = EventManager()
 
-
-    upbit = main_upbit.Notifier()
-    slack = main_slack.SlackBot(SLACK_BOT_TOKEN, SLACK_APP_TOKEN, CHANNEL_ID)
+    upbit = main_upbit.Notifier(event_manager)
+    chat = main_chat.MattermostBot(MATTERMOST_URL, MATTERMOST_ACCESS_TOKEN, MATTERMOST_TEAM_NAME, MATTERMOST_CHANNEL_NAME, event_manager, upbit)
     
-    slack.set_rsi(upbit)
-    upbit.set_slack(slack.send_message, slack.pinned_message)
+    
 
     upbit.set_schedule()
 
     upbit_thread = threading.Thread(target=upbit.run)
-    slack_thread = threading.Thread(target=slack.start_slack_app)
+    chat_thread = threading.Thread(target=chat.start_chat_bot)
 
 
     upbit_thread.start()
-    slack_thread.start()
+    chat_thread.start()
 
     slack_thread.join()

@@ -13,12 +13,20 @@ import comm_.graph_util as graph_util
 
 
 class SlackBot:
-    def __init__(self, SLACK_BOT_TOKEN, SLACK_APP_TOKEN, CHANNEL_ID):
+    def __init__(self, SLACK_BOT_TOKEN, SLACK_APP_TOKEN, CHANNEL_ID, event_manager, rsi):
         self.app = App(token=SLACK_BOT_TOKEN)
         self.SLACK_APP_TOKEN = SLACK_APP_TOKEN
         self.CHANNEL_ID = CHANNEL_ID
+        self.event_manager = event_manager
+        self.rsi = rsi
 
 
+        # 이벤트 구독
+        self.event_manager.subscribe('send_message', self.send_message)
+        self.event_manager.subscribe('pinned_message', self.pinned_message)
+
+
+        ###################################
         self.app.command("/getask")(self.handle_command)
 
         self.app.command("/get_csv")(self.send_csv_slack)
@@ -634,6 +642,6 @@ class SlackBot:
     def message_hello(self, message, say):
         say(f"Hey there <@{message['user']}>!")
 
-    def start_slack_app(self):
+    def start_chat_bot(self):
         SocketModeHandler(self.app, self.SLACK_APP_TOKEN).start()
 

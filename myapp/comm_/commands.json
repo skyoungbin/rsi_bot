@@ -1,0 +1,106 @@
+{
+    "!getask": {
+        "description": "command 테스트용",
+        "example": "!getask"
+    },
+    "!get_csv": {
+        "description": "Ticker의 csv 파일을 가져옵니다",
+        "example": "!get_csv btc"
+    },
+    "!add_tickers": {
+        "description": "ticker 추가",
+        "example": "!add_tickers btc"
+    },
+    "!del_tickers": {
+        "description": "ticker 삭제",
+        "example": "!del_tickers btc"
+    },
+    "!update_tickers": {
+        "description": "ticker의 환경값을 변경합니다 params=[]",
+        "example": "!update_tickers btc params value"
+    },
+    "!all_tickers": {
+        "description": "사용가능 ticker",
+        "example": "!all_tickers"
+    },
+    "!active_tickers": {
+        "description": "활성화중인 ticker",
+        "example": "!active_tickers"
+    },
+    "!status_tickers": {
+        "description": "ticker의 상태",
+        "example": "!status_tickers btc"
+    },
+    "!get_graph": {
+        "description": "Ticker의 그래프를 가져옵니다",
+        "example": "!get_graph btc"
+    },
+    "!all_alarms": {
+        "description": "사용가능 alarm",
+        "example": "!all_alarms"
+    },
+    "!add_alarms": {
+        "description": "alarm 추가",
+        "example": "!add_alarms btc alarm"
+    },
+    "!del_alarms": {
+        "description": "alarm 삭제",
+        "example": "!del_alarms btc alarm"
+    },
+    "!update_alarms": {
+        "description": "alarms의 환경값을 변경합니다 params=[]",
+        "example": "!update_alarms btc alarm parms value"
+    },
+    "!get_csv_alarms": {
+        "description": "alarms의 tick_df를 가져옵니다",
+        "example": "!get_csv_alarms btc alarm"
+    },
+    "!all_bots": {
+        "description": "사용가능 bot",
+        "example": "!all_bots"
+    },
+    "!add_bots": {
+        "description": "bot을 추가합니다",
+        "example": "!add_bots btc bot"
+    },
+    "!del_bots": {
+        "description": "bot 삭제",
+        "example": "!del_bots btc bot"
+    },
+    "!update_bots": {
+        "description": "bot 환경값을 변경합니다 params=[]",
+        "example": "!update_bots btc bot params value"
+    },
+    "!get_orderbook_bots": {
+        "description": "bot의 구매내역",
+        "example": "!get_orderbook_bots btc bot"
+    },
+    "!get_csv_bots": {
+        "description": "bot의 df를 가져옵니다",
+        "example": "!get_csv_bots btc bot"
+    },
+    "!get_graph_bots": {
+        "description": "bot의 그래프를 가져옵니다",
+        "example": "!get_graph_bots btc bot"
+    },
+    "!buy_tickers": {
+        "description": "ticker 구매",
+        "example": "!buy_tickers btc"
+    },
+    "!sell_tickers": {
+        "description": "ticker 판매",
+        "example": "!sell_tickers"
+    },
+    "!get_orderbook": {
+        "description": "구매내역",
+        "example": "!get_orderbook"
+    },
+    "!status_users": {
+        "description": "user의 상태",
+        "example": "!status_users"
+    },
+    "!hello": {
+        "description": "test hello",
+        "example": "!hello"
+    }
+}

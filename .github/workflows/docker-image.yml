@@ -59,9 +59,10 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
           cd ~/docker/sk_rsi_bot
-          echo "SLACK_APP_TOKEN=${{ secrets.SLACK_APP_TOKEN }}" > .env
-          echo "SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }}" >> .env
-          echo "CHANNEL_ID=${{ secrets.CHANNEL_ID }}" >> .env
+          echo "MATTERMOST_URL=${{ secrets.MATTERMOST_URL }}" > .env
+          echo "MATTERMOST_ACCESS_TOKEN=${{ secrets.MATTERMOST_ACCESS_TOKEN }}" >> .env
+          echo "MATTERMOST_CHANNEL_NAME=${{ secrets.MATTERMOST_CHANNEL_NAME }}" >> .env
+          echo "MATTERMOST_TEAM_NAME=${{ secrets.MATTERMOST_TEAM_NAME }}" >> .env
           docker compose down
           docker compose build
           docker compose up -d

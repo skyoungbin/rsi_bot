@@ -204,21 +204,51 @@ class TickerData:
     #         self._bot.remove(value)
 
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
+    # def __getstate__(self):
+    #     state = self.__dict__.copy()
 
-        del state['_ticker_df']
-        del state['_last_row']
-        del state['_last_bar']
-        del state['lock']
+    #     del state['_ticker_df']
+    #     del state['_last_row']
+    #     del state['_last_bar']
+    #     del state['lock']
 
-        return state
+    #     return state
 
-    def __setstate__(self, state):
+    # def __setstate__(self, state):
 
-        self.__dict__.update(state)
+    #     self.__dict__.update(state)
 
-        self._ticker_df = pd.DataFrame()
-        self._last_row = pd.DataFrame()
-        self._last_bar = None
-        self.lock = threading.Lock()
+    #     self._ticker_df = pd.DataFrame()
+    #     self._last_row = pd.DataFrame()
+    #     self._last_bar = None
+    #     self.lock = threading.Lock()
+
+
+    def to_dict(self):
+        try:
+            return {
+                'symbol': self.symbol,
+                'candle': self._candle,
+                'alarm': {k: v.to_dict() for k, v in self._alarm.items()},
+                'bot': {k: v.to_dict() for k, v in self._bot.items()}
+            }
+        except Exception as e:
+            logging.error(f"Failed to save tickers: {e}")
+
+    @classmethod
+    def from_dict(cls, data, alarm_instances, bot_instances):
+        try:
+            ticker = cls(data['symbol'])
+            ticker._candle = data['candle']
+            
+            for k, v in data['alarm'].items():
+                if k in alarm_instances:
+                    ticker._alarm[k] = alarm_instances[k].from_dict(v, ticker)
+            
+            for k, v in data['bot'].items():
+                if k in bot_instances:
+                    ticker._bot[k] = bot_instances[k].from_dict(v, ticker)
+            
+            return ticker
+        except Exception as e:
+            logging.error(f"Failed to save tickers: {e}")

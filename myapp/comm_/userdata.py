@@ -1,5 +1,6 @@
 import threading
 import pandas as pd
+import logging
 
 import comm_.tool_util as tool_util
 import comm_.trade_util as trade_util
@@ -24,15 +25,12 @@ class UserData:
         self.lock = threading.Lock()
 
     def get_state(self, trade_price):
-
         return {
-            self.__class__.__name__: {
-                "last_row": self.orderbook.tail(1).to_dict(orient='records'),
-                "total_assets": self.total_assets,
-                "purchase_status": self.purchase_status,
-                "buy_ticker": self.buy_ticker,
-                "return_rate": trade_util.calculate_return(self.orderbook.iloc[-1]['price'], trade_price) * 100 if self.purchase_status else None
-            }
+            "last_row": self.orderbook.tail(1).to_dict(orient='records'),
+            "total_assets": self.total_assets,
+            "purchase_status": self.purchase_status,
+            "buy_ticker": self.buy_ticker,
+            "return_rate": trade_util.calculate_return(self.orderbook.iloc[-1]['price'], trade_price) * 100 if self.purchase_status else None
         }
 
     def buy_order(self, ticker, trade_price):
@@ -124,17 +122,43 @@ class UserData:
 
 
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
+    # def __getstate__(self):
+    #     state = self.__dict__.copy()
 
-        del state['_orderbook']
-        del state['lock']
+    #     del state['_orderbook']
+    #     del state['lock']
 
-        return state
+    #     return state
 
-    def __setstate__(self, state):
+    # def __setstate__(self, state):
 
-        self.__dict__.update(state)
+    #     self.__dict__.update(state)
 
-        self._orderbook = pd.DataFrame()
-        self.lock = threading.Lock()
+    #     self._orderbook = pd.DataFrame()
+    #     self.lock = threading.Lock()
+
+
+    def to_dict(self):
+        try:
+            return {
+                'purchase_status': self._purchase_status,
+                'total_assets': self._total_assets,
+                'neutral_price': self._neutral_price,
+                'buy_ticker': self._buy_ticker,
+                'orderbook': self._orderbook.to_dict(orient='records')
+            }
+        except Exception as e:
+            logging.error(f"Failed to save tickers: {e}")
+
+    @classmethod
+    def from_dict(cls, data):
+        try:
+            user = cls()
+            user._purchase_status = data['purchase_status']
+            user._total_assets = data['total_assets']
+            user._neutral_price = data['neutral_price']
+            user._buy_ticker = data['buy_ticker']
+            user._orderbook = pd.DataFrame(data['orderbook'])
+            return user
+        except Exception as e:
+            logging.error(f"Failed to save tickers: {e}")

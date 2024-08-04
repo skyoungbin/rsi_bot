@@ -125,13 +125,35 @@ class Bot():
             }
 
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
+    # def __getstate__(self):
+    #     state = self.__dict__.copy()
 
-        return state
+    #     return state
 
-    def __setstate__(self, state):
+    # def __setstate__(self, state):
 
-        self.__dict__.update(state)
+    #     self.__dict__.update(state)
+
+    def to_dict(self):
+        return {
+            'symbol': self.symbol,
+            'candle': self.candle,
+            'degree': self.degree,
+            'days_ago': self.days_ago,
+            'total_assets': self.total_assets,
+            'purchase_status': self.purchase_status,
+            'orderbook': self.orderbook.to_dict(orient='records')
+        }
+
+    @classmethod
+    def from_dict(cls, data, tickerdata):
+        bot = cls(tickerdata)
+        bot.candle = data['candle']
+        bot.degree = data['degree']
+        bot.days_ago = data['days_ago']
+        bot.total_assets = data['total_assets']
+        bot.purchase_status = data['purchase_status']
+        bot.orderbook = pd.DataFrame(data['orderbook'])
+        return bot
 
 

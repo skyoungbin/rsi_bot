@@ -16,7 +16,7 @@ class AlarmWait():
 
         if self.timer is None:
             #self.timer.cancel()  # 이미 실행 중인 타이머가 있다면 취소합니다.
-            self.timer = threading.Timer(300, self.reset_wait)  # 10분 후에 reset_wait 호출
+            self.timer = threading.Timer(1, self.reset_wait)  # 10분 후에 reset_wait 호출
             self.timer.start()
 
     def reset_wait(self):

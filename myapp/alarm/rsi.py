@@ -120,21 +120,39 @@ class Alarm(AlarmWait):
 
         self._rsi_window = value
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
+    # def __getstate__(self):
+    #     state = self.__dict__.copy()
 
-        del state['df']
-        del state['tick_df']
-        del state['last_rsi']
+    #     del state['df']
+    #     del state['tick_df']
+    #     del state['last_rsi']
 
-        return state
+    #     return state
 
-    def __setstate__(self, state):
+    # def __setstate__(self, state):
 
-        self.__dict__.update(state)
+    #     self.__dict__.update(state)
 
-        self.df = pd.DataFrame()
-        self.tick_df = pd.DataFrame()
-        self.last_rsi = None
+    #     self.df = pd.DataFrame()
+    #     self.tick_df = pd.DataFrame()
+    #     self.last_rsi = None
+
+
+    def to_dict(self):
+        return {
+            'symbol': self.symbol,
+            'vol_high': self._vol_high,
+            'vol_low': self._vol_low,
+            'rsi_window': self._rsi_window,
+        }
+
+    @classmethod
+    def from_dict(cls, data, tickerdata):
+        alarm = cls(tickerdata)
+        alarm._vol_high = data['vol_high']
+        alarm._vol_low = data['vol_low']
+        alarm._rsi_window = data['rsi_window']
+        return alarm
+
 
 
