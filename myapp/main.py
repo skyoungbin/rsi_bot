@@ -77,4 +77,4 @@ if __name__ == "__main__":
     upbit_thread.start()
     chat_thread.start()
 
-    slack_thread.join()
+    chat_thread.join()
